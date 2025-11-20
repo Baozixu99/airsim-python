@@ -1,0 +1,11 @@
+# Ignore IDE and backup
+
+.vs/
+.idea/
+
+# Ignore image directory in root
+/images/
+/backup/images/
+# Python artifacts
+__pycache__/
+*.pyc
