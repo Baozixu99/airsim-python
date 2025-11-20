@@ -8,6 +8,7 @@ import airsim
 import time
 import socket
 import os
+
 #11.19：将图片修改为发送给两个开发板，8891端口给NXP使用，8892端口给RK3588使用，需要同时修改connect_to_MARL.py和开发板中的IR_test.py
 
 
@@ -196,30 +197,25 @@ def th1_pic():
         print("服务器已启动，等待连接...")
         conn1, addr = s.accept()  #11.19新增
         conn2, addr = s.accept() #11.19新增
-        # while True:
-        #     conn, addr = s.accept()
-        #     with conn:
-        #         conn.sendall(send_msg.encode('UTF-8'))
-        #         print(f"已发送消息给客户端: {send_msg}")
-        #         recv_data = conn.recv(1024).decode("UTF-8")
-        #         print(f"从客户端收到的消息是：{recv_data}")
+
         while True:
             global UAV_task1,UAV_task2,UAV_sensor1,UAV_sensor2,UAV_finished1,UAV_finished2
             if task_change == True:
                 #with conn:
-                conn1.sendall(send_msg.encode('UTF-8'))
+                conn1.sendall(send_msg.encode('UTF-8'))         #11.19新增 uav1向is2ros发送天气信息011111
                 print(f"已发送消息给客户端: {send_msg}")
-                recv_data_1 = conn1.recv(1024).decode("UTF-8")
+                recv_data_1 = conn1.recv(1024).decode("UTF-8")  #11.19新增 uav1收到is2ros选择结果
                 print(f"从客户端收到的消息是：{recv_data_1}")
-                conn2.sendall(send_msg.encode('UTF-8'))
-                recv_data_2 = conn2.recv(1024).decode("UTF-8")
+
+                conn2.sendall(send_msg.encode('UTF-8'))         #11.19新增 uav2向is2ros发送天气信息011111
+                print(f"已发送消息给客户端: {send_msg}")
+                recv_data_2 = conn2.recv(1024).decode("UTF-8")  #11.19新增 uav2收到is2ros选择结果
                 print(f"从客户端收到的消息是：{recv_data_2}")
                 # require.send(send_msg.encode("UTF-8"))
                 # # 接受消息
                 # recv_data = require.recv(1024).decode("UTF-8")  # 1024是缓冲区大小，一般就填1024， recv是阻塞式
                 # print(f"服务端回复的消息是：{recv_data}")
-                # recv_data = recv_data_1 + recv_data_2
-                recv_data = recv_data_1  #11.19新增，后续可以和recv_data_2进行拼接，现在只用了recv_data_1，因为recv_data_1和recv_data_2都会发送3040，可以只要recv_data_1前两个30，以及recv_data_2的后两个40，然后拼接成recv_data，现在只是暂时使用了recv_data_1（图快）
+                recv_data = recv_data_1  #11.19新增，后续需要和recv_data_2进行拼接，现在只用了recv_data_1，因为recv_data_1和recv_data_2都会发送3040，可以只要recv_data_1前两个30，以及recv_data_2的后两个40，然后拼接成recv_data，现在只是暂时直接使用了recv_data_1（省事）
                 for i,char in zip(range(0,4),recv_data):
                     if i == 0:
                         UAV_task1 = int(char)
