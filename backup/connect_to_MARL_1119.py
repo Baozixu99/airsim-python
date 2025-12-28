@@ -10,15 +10,19 @@ import socket
 import os
 
 #科为演示使用，send_port = server_port_th1改为了send_port = server_port_th2，只发送给rk3588,因为rk3588只接收8892端口的图片（因为修改了TR_test的端口，只接受8892），8891端口留给nxp开发板使用
+#该文件适用于一个开发板的情况，想仿真环境的图片都通过8892端口发送给开发板，开发板上的IR_test.py文件中uav_configs应只保留8892端口,如下：
+# 例如：uav_configs = [
+#     (8892, "/home/jupyterWorkspace/is2ros_yolov5_inference_zc/labels_and_dataset/dataset/my_data/", "uav2"),
+# ]
+
 
 tasknum = 5
-UAVnum = 2
+UAVnum = 1
 # require = socket.socket()
 # require.connect(("10.31.36.63", 65432))
 
 
-server_ip = "10.31.71.190"   # UAV1 图像接收服务器（PC地址），端口号改成了8891 8892 8893（暂时没用到），端口转发工具需一致
-server_port_th1 = 8891
+server_ip = "10.31.32.91"   # UAV1 图像接收服务器（PC地址），端口号改成了8891 8892 8893（暂时没用到），端口转发工具需一致
 server_port_th2 = 8892
 
 
@@ -268,21 +272,24 @@ def th1_pic():
                     vehicle_name="UAV"+str(j))
                 image_data = responses[0].image_data_uint8
                 if j == 1:
-                    # send_port = server_port_th1
                     send_port = server_port_th2
-                elif j == 2:
-                    send_port = server_port_th2
+                # elif j == 2:
+                #     send_port = server_port_th2
                 # ========== Step 1: 发送图像到远程服务器 ==========
                 try:
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+                        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                         sock.connect((server_ip, send_port))
 
                         # # 先发送图像大小
                         img_size = len(image_data)
+                        print(f"UAV{j} Sending image size: {img_size} bytes to {send_port}")
                         sock.sendall(img_size.to_bytes(4, byteorder='big'))
 
                         # 再发送图像数据
                         sock.sendall(image_data)
+                        #强制等待 0.5 秒，确保缓冲区数据飞到接收端,否则 socket 关闭太快，接收端会读到不完整的数据
+                        time.sleep(1)
                 except Exception as e:
                     print("发送图像失败:", e)
 
@@ -294,7 +301,7 @@ def th1_pic():
                 file1.write(str(get_uav_distance(pic_client,"UAV"+str(j))).encode())
                 file1.close()
             i += 1
-            time.sleep(1)
+            time.sleep(4) #每隔3秒发送一张图片
 
 
 origin_point_x = -1783.749375

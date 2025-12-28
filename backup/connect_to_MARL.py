@@ -10,8 +10,8 @@ import socket
 import os
 
 #11.19：将图片修改为发送给两个开发板，8891端口给NXP使用，8892端口给RK3588使用，需要同时修改connect_to_MARL.py和开发板中的IR_test.py
-
-
+#connect_to_MARL.py必须要有两个开发板同时连接65432端口用于接收仿真环境发送的图片，如果只有一个开发板连接了65432端口s.listen(2)在“等待第二个连接”时会把整个线程卡死。
+#如果只有一个开发板可以使用connect_to_MARL_1119.py
 
 tasknum = 5
 UAVnum = 2
@@ -193,7 +193,7 @@ def th1_pic():
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         # 绑定到指定端口
         s.bind(('0.0.0.0', 65432))
-        s.listen(2)             #11.19新增 两个链接（rk3588和NXP），增加其他无人机的时候可以增加
+        s.listen(2)             #11.19新增 [必须同时有2个开发板连65432] 两个链接（rk3588和NXP），增加其他无人机的时候可以增加
         print("服务器已启动，等待连接...")
         conn1, addr = s.accept()  #11.19新增
         conn2, addr = s.accept() #11.19新增
