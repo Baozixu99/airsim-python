@@ -14,7 +14,7 @@ import os
 # 例如：uav_configs = [
 #     (8892, "/home/jupyterWorkspace/is2ros_yolov5_inference_zc/labels_and_dataset/dataset/my_data/", "uav2"),
 # ]
-
+#测试大概测试，在飞腾派开发板以及rk3588上可运行（注：只能单个开发板）
 
 tasknum = 5
 UAVnum = 1
@@ -22,7 +22,7 @@ UAVnum = 1
 # require.connect(("10.31.36.63", 65432))
 
 
-server_ip = "10.31.32.91"   # UAV1 图像接收服务器（PC地址），端口号改成了8891 8892 8893（暂时没用到），端口转发工具需一致
+server_ip = "10.31.188.214"   # UAV1 图像接收服务器（PC地址），端口号改成了8891 8892 8893（暂时没用到），端口转发工具需一致
 server_port_th2 = 8892
 
 
@@ -33,6 +33,94 @@ UAV_sensor2 = 0
 UAV_finished1 = False
 UAV_finished2 = False
 not_all_finished = True
+
+# ========== 天气和昼夜控制变量 ==========
+current_weather_index = 0  # 当前天气场景索引
+
+# 天气场景配置列表：[场景名称, 雾浓度, 雨浓度, 沙尘浓度, 时间字符串, 描述]
+# 注意：如果 ENABLE_TIME_CONTROL = False，时间字符串不会生效，所有场景都使用UE默认光照
+weather_scenarios = [
+    ["晴天", 0.0, 0.0, 0.0, "2024-06-15 12:00:00", "Clear weather"],
+    ["轻雾", 0.2, 0.0, 0.0, "2024-06-15 11:00:00", "Light fog"],
+    ["中雾", 0.4, 0.0, 0.0, "2024-06-15 12:30:00", "Medium fog"],
+    ["小雨", 0.0, 0.5, 0.0, "2024-06-15 13:00:00", "Light rain"],
+    ["中雨", 0.0, 0.8, 0.0, "2024-06-15 11:30:00", "Medium rain"],
+    ["轻度沙尘", 0.0, 0.0, 0.3, "2024-06-15 12:00:00", "Light dust"],
+    ["重雾", 0.6, 0.0, 0.0, "2024-06-15 22:00:00", "Heavy fog"],
+    ["大雾", 0.5, 0.0, 0.0, "2024-06-15 21:00:00", "Dense fog"],
+    ["大雨", 0.0, 0.9, 0.0, "2024-06-15 20:00:00", "Heavy rain"],
+    ["中度沙尘", 0.0, 0.0, 0.4, "2024-06-15 23:00:00", "Medium dust"],
+]
+# 如果不需要时间控制（推荐），可以简化场景配置，忽略时间字符串
+# weather_scenarios_simple = [
+#     ["晴天", 0.0, 0.0, 0.0, "", "Clear weather"],
+#     ["轻雾", 0.2, 0.0, 0.0, "", "Light fog"],
+#     ["小雨", 0.0, 0.5, 0.0, "", "Light rain"],
+#     ["轻度沙尘", 0.0, 0.0, 0.3, "", "Light dust"],
+# ]
+
+# (或者直接用简化版覆盖)
+# weather_scenarios = weather_scenarios_simple
+
+# ========== 昼夜控制开关 (固定为 False，因为我们不使用时间控制) ==========
+# False: 禁用昼夜控制，只控制天气（推荐）
+ENABLE_TIME_CONTROL = False # <--- 添加这个常量并设为 False
+# ========== 天气和时间控制函数 ==========
+def set_weather_and_time(client, scenario):
+    """
+    设置天气和时间
+    scenario: [场景名称, 雾浓度, 雨浓度, 沙尘浓度, 时间字符串, 描述]
+    """
+    name, fog, rain, dust, time_str, desc = scenario
+
+    print(f"\n========== 切换天气场景 ==========")
+    print(f"场景: {name} - {desc}")
+    print(f"雾: {fog}, 雨: {rain}, 沙尘: {dust}")
+    if ENABLE_TIME_CONTROL:
+        print(f"时间: {time_str}")
+    else:
+        print(f"时间控制: 已禁用（使用UE默认光照）")
+    print(f"====================================\n")
+
+    # 启用天气系统
+    client.simEnableWeather(True)
+
+    # 设置天气参数
+    client.simSetWeatherParameter(airsim.WeatherParameter.Fog, fog)
+    client.simSetWeatherParameter(airsim.WeatherParameter.Rain, rain)
+    client.simSetWeatherParameter(airsim.WeatherParameter.Dust, dust)
+
+    # 根据开关决定是否设置时间
+    if ENABLE_TIME_CONTROL:
+        try:
+            client.simSetTimeOfDay(
+                is_enabled=True,
+                start_datetime=time_str,
+                is_start_datetime_dst=False,
+                celestial_clock_speed=1,  # 时间流速倍数，1表示正常速度
+                update_interval_secs=60,   # 更新间隔
+                move_sun=True              # 移动太阳位置
+            )
+            print(f"时间设置成功: {time_str}")
+        except Exception as e:
+            print(f"时间设置失败（可能需要UE场景配置Movable光源）: {e}")
+    else:
+        # 禁用时间控制，使用UE场景的默认光照
+        try:
+            client.simSetTimeOfDay(is_enabled=False)
+        except:
+            pass  # 如果API不支持，忽略错误
+
+
+def cycle_to_next_weather(client):
+    """
+    循环到下一个天气场景
+    """
+    global current_weather_index
+    current_weather_index = (current_weather_index + 1) % len(weather_scenarios)
+    set_weather_and_time(client, weather_scenarios[current_weather_index])
+    return weather_scenarios[current_weather_index]
+
 class taskpoint(object):
     def __init__(self,point_x,point_y,point_z):
         self.point_x = point_x
@@ -181,16 +269,34 @@ def handle_client(conn, addr, send_msg):
     conn.close()
 
 
-
-
 def th1_pic():
+    # 需要在函数开头声明全局变量
+    global UAV_task1, UAV_task2, UAV_sensor1, UAV_sensor2, UAV_finished1, UAV_finished2, current_weather_index
+
     i = 0
     pic_client = airsim.MultirotorClient()
-    pic_client.simEnableWeather(True)
-    task_change = True
     print("图像采集线程启动")
-    send_msg = "011111"
-    x = 0
+    task_change = True
+
+    # 定义天气类型与消息映射
+    # 可见光天气（晴天、小雨、中雨、轻度沙尘）-> "011111"
+    # 红外天气（轻雾、中雾、重雾、大雾、大雨、中度沙尘）-> "311111"
+    VISIBLE_LIGHT_WEATHERS = [0, 3, 4, 5]  # 对应weather_scenarios中的索引
+    INFRARED_WEATHERS = [1, 2, 6, 7, 8, 9]  # 对应weather_scenarios中的索引
+
+    # 初始化send_msg
+    if current_weather_index in VISIBLE_LIGHT_WEATHERS:
+        send_msg = "011111"
+    else:
+        send_msg = "311111"
+
+    # 设置初始天气场景
+    set_weather_and_time(pic_client, weather_scenarios[current_weather_index])
+    print(f"初始天气场景: {weather_scenarios[current_weather_index][0]}, 使用消息: {send_msg}")
+
+    weather_switch_timer = 0  # 天气切换计时器
+    weather_interval = 4  # 每4次循环切换一次天气
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         # 绑定到指定端口
         s.bind(('0.0.0.0', 65432))
@@ -198,110 +304,130 @@ def th1_pic():
         print("服务器已启动，等待连接...")
         conn, addr = s.accept()
 
-        # while True:
-        #     conn, addr = s.accept()
-        #     with conn:
-        #         conn.sendall(send_msg.encode('UTF-8'))
-        #         print(f"已发送消息给客户端: {send_msg}")
-        #         recv_data = conn.recv(1024).decode("UTF-8")
-        #         print(f"从客户端收到的消息是：{recv_data}")
         while True:
-            global UAV_task1,UAV_task2,UAV_sensor1,UAV_sensor2,UAV_finished1,UAV_finished2
+            # ========== 新增：定时自动切换天气 ==========
+            weather_switch_timer += 1
+            if weather_switch_timer >= weather_interval:
+                # 保存旧的天气索引
+                old_weather_index = current_weather_index
+
+                # 切换到下一个天气
+                cycle_to_next_weather(pic_client)
+
+                # 检查天气是否已切换
+                if old_weather_index != current_weather_index:
+                    # 根据新天气更新send_msg
+                    if current_weather_index in VISIBLE_LIGHT_WEATHERS:
+                        send_msg = "011111"
+                    else:
+                        send_msg = "311111"
+                    print(f"天气已切换到: {weather_scenarios[current_weather_index][0]}, 更新消息为: {send_msg}")
+
+                weather_switch_timer = 0  # 重置计时器
+                print(f"已自动切换到下一个天气场景\n")
+
             if task_change == True:
-                #with conn:
                 conn.sendall(send_msg.encode('UTF-8'))
                 print(f"已发送消息给客户端: {send_msg}")
                 recv_data = conn.recv(1024).decode("UTF-8")
                 print(f"从客户端收到的消息是：{recv_data}")
-                # require.send(send_msg.encode("UTF-8"))
-                # # 接受消息
-                # recv_data = require.recv(1024).decode("UTF-8")  # 1024是缓冲区大小，一般就填1024， recv是阻塞式
-                # print(f"服务端回复的消息是：{recv_data}")
 
-                for i,char in zip(range(0,4),recv_data):
-                    if i == 0:
+                for idx, char in zip(range(0, 4), recv_data):
+                    if idx == 0:
                         UAV_task1 = int(char)
                         arr = msg2arr(send_msg)
-                        arr[UAV_task1+1] = 0
+                        arr[UAV_task1 + 1] = 0
                         send_msg = arr2msg(arr)
                         print(send_msg)
 
-                    if i == 1:
+                    if idx == 1:
                         print("char:" + str(char))
                         UAV_sensor1 = int(char)
                         if UAV_sensor1 == 1:
                             UAV_sensor1 = 7
-                        print("UAV_sensor:"+str(UAV_sensor1))
-                    if i == 2:
+                        print("UAV_sensor:" + str(UAV_sensor1))
+
+                        # 当传感器类型变化时，更新send_msg
+                        if UAV_sensor1 == 7:  # 红外
+                            send_msg = "3" + send_msg[1:]
+                        elif UAV_sensor1 == 0:  # 可见光
+                            send_msg = "0" + send_msg[1:]
+
+                    if idx == 2:
                         UAV_task2 = int(char)
                         arr = msg2arr(send_msg)
                         arr[UAV_task2 + 1] = 0
                         send_msg = arr2msg(arr)
                         print(send_msg)
 
-                    if i == 3:
-                        print("char:"+str(char))
+                    if idx == 3:
+                        print("char:" + str(char))
                         UAV_sensor2 = int(char)
                         if UAV_sensor2 == 1:
                             UAV_sensor2 = 7
-                        print("UAV_sensor:"+str(UAV_sensor2))
+                        print("UAV_sensor:" + str(UAV_sensor2))
+
+                        # 当传感器类型变化时，更新send_msg
+                        if UAV_sensor2 == 7:  # 红外
+                            send_msg = "3" + send_msg[1:]
+                        elif UAV_sensor2 == 0:  # 可见光
+                            send_msg = "0" + send_msg[1:]
                 task_change = False
+
             if UAV_finished1 and UAV_finished2:
                 task_change = True
-                x = 0.4 -x
-                pic_client.simSetWeatherParameter(airsim.WeatherParameter.Fog, x)
                 arr = msg2arr(send_msg)
                 arr[0] = 3 - arr[0]
                 send_msg = arr2msg(arr)
                 UAV_finished1 = False
                 UAV_finished2 = False
 
-            # if i>100:
-            #     pic_client.simSetWeatherParameter(airsim.WeatherParameter.Fog,0.4)
-            #     arr = msg2arr(send_msg)
-            #     arr[0] = 3
-            #     send_msg = arr2msg(arr)
-            #     task_change = True
-
+            # ... 其余图像采集和发送逻辑保持不变 ...
             imagetype = []
-            imagetype.append(UAV_sensor1)
-            imagetype.append(UAV_sensor2)
-            for j in range(1,UAVnum+1):
+            # 根据send_msg的第一个字符确定传感器类型
+            current_sensor_type = int(send_msg[0])
+            if current_sensor_type == 0:  # 可见光
+                imagetype.append(0)
+            elif current_sensor_type == 3:  # 红外
+                imagetype.append(7)
+
+            # 保持UAV_sensor1和UAV_sensor2的同步
+            UAV_sensor1 = imagetype[0]
+            if UAVnum > 1:
+                imagetype.append(UAV_sensor2)
+            else:
+                imagetype.append(0)
+
+            for j in range(1, UAVnum + 1):
                 responses = pic_client.simGetImages([
-                    airsim.ImageRequest("bottom_center", imagetype[j-1], pixels_as_float=False, compress=True)],
-                    vehicle_name="UAV"+str(j))
+                    airsim.ImageRequest("bottom_center", imagetype[j - 1], pixels_as_float=False, compress=True)],
+                    vehicle_name="UAV" + str(j))
                 image_data = responses[0].image_data_uint8
                 if j == 1:
                     send_port = server_port_th2
-                # elif j == 2:
-                #     send_port = server_port_th2
-                # ========== Step 1: 发送图像到远程服务器 ==========
+
                 try:
                     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
                         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
                         sock.connect((server_ip, send_port))
 
-                        # # 先发送图像大小
                         img_size = len(image_data)
                         print(f"UAV{j} Sending image size: {img_size} bytes to {send_port}")
                         sock.sendall(img_size.to_bytes(4, byteorder='big'))
-
-                        # 再发送图像数据
                         sock.sendall(image_data)
-                        #强制等待 0.5 秒，确保缓冲区数据飞到接收端,否则 socket 关闭太快，接收端会读到不完整的数据
                         time.sleep(1)
                 except Exception as e:
                     print("发送图像失败:", e)
 
-                # ========== Step 2: 本地保存图像 ==========
-                file1 = open("images/" + "UAV"+str(j) + "/" + "bottom.png", 'wb')
+                file1 = open("images/" + "UAV" + str(j) + "/" + "bottom.png", 'wb')
                 file1.write(responses[0].image_data_uint8)
                 file1.close()
                 file1 = open("images/" + "UAV" + str(j) + "/" + "bottom.txt", 'wb')
-                file1.write(str(get_uav_distance(pic_client,"UAV"+str(j))).encode())
+                file1.write(str(get_uav_distance(pic_client, "UAV" + str(j))).encode())
                 file1.close()
+
             i += 1
-            time.sleep(4) #每隔3秒发送一张图片
+            time.sleep(4)  # 每隔4秒发送一张图片
 
 
 origin_point_x = -1783.749375
