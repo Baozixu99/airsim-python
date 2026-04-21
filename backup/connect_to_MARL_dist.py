@@ -22,7 +22,7 @@ UAV_ports = []
 # 监听Windows本机所有网卡
 host = '0.0.0.0'
 # WSL2中IROS监听IP（可通过环境变量覆盖）
-IROS_HOST = os.getenv("IROS_HOST", "192.168.137.2")
+IROS_HOST = os.getenv("IROS_HOST", "10.31.32.91")
 send_msg = "011111"             # 初始观测向量
 
 # ================= 天气场景配置 =================
@@ -47,7 +47,7 @@ WEATHER_SWITCH_INTERVAL = int(os.getenv("WEATHER_SWITCH_INTERVAL", "8"))  # 天�
 # ================= 天气和图像传输配置 =================
 # 默认红外推理服务器（可被每架无人机的独立配置覆盖）
 INFRARED_SERVER_HOST = os.getenv("INFRARED_SERVER_HOST", IROS_HOST)
-INFRARED_SERVER_PORT = int(os.getenv("INFRARED_SERVER_PORT", "8892"))
+INFRARED_SERVER_PORT = int(os.getenv("INFRARED_SERVER_PORT", "8881"))
 
 # 每架无人机可单独指定图像接收端：
 # INFRARED_SERVER_HOST_UAV1/2/3/4/5 和 INFRARED_SERVER_PORT_UAV1/2/3/4/5
