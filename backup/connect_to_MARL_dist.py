@@ -13,17 +13,40 @@ UAVnum = int(os.getenv("UAV_NUM", "5"))  # 无人机个数（单机测试可设 
 # 添加全局锁，防止多个线程同时读写 send_msg 导致数据错乱/越界
 msg_lock = threading.Lock()
 
+
 sockets = []
 UAV_tasks = []
 UAV_sensors = []
 UAV_sensor_ready = []
 UAV_ports = []
 
-# 监听Windows本机所有网卡
+# 监听本机所有网卡
 host = '0.0.0.0'
-# WSL2中IROS监听IP（可通过环境变量覆盖）
-IROS_HOST = os.getenv("IROS_HOST", "10.31.32.91")
+# IROS监听IP，如果是在服务器上运行UE4及该脚本,需要将该ip改为给开发板共享网络的主机IP；
+#如果是在主机上运行UE4及该脚本，需要将该ip改为开发板的IP地址，即192.168.137.2；
+IROS_HOST = os.getenv("IROS_HOST", "10.31.32.91")     #主机IP
+# IROS_HOST = os.getenv("IROS_HOST", "192.168.137.2") #开发板IP
+
 send_msg = "011111"             # 初始观测向量
+# ================= 天气和图像传输配置 =================
+# 红外推理服务器端口配置：直接在代码中写死，按需启用/禁用
+# UAV1 默认启用；UAV2~UAV5 如果暂时不用，保持 None 即可，发送时会自动跳过。
+INFRARED_SERVER_ENDPOINTS = [
+    (IROS_HOST, 8881),  # UAV1 对应imx8mp
+    (IROS_HOST, 8882),  # UAV2 对应rk3588
+    (IROS_HOST, 8883),  # UAV3 对应飞腾派
+    (IROS_HOST, 8884),  # UAV4 对应p550
+    (IROS_HOST, 8885),  # UAV5 对应3A6000
+]
+
+# 如果当前只做单机测试，可以把不用的 UAV 端点改成 None，例如：
+# INFRARED_SERVER_ENDPOINTS = [
+#     (IROS_HOST, 8881),
+#     None,
+#     None,
+#     None,
+#     None,
+# ]
 
 # ================= 天气场景配置 =================
 # 注意：如果 ENABLE_TIME_CONTROL = False，时间字符串不会生效，所有场景都使用UE默认光照
@@ -44,18 +67,6 @@ current_weather_index = 0       # 当前天气场景索引
 ENABLE_TIME_CONTROL = False     # 昼夜控制开关（推荐设为False）
 WEATHER_SWITCH_INTERVAL = int(os.getenv("WEATHER_SWITCH_INTERVAL", "8"))  # 天气切换循环间隔（默认更慢）
 
-# ================= 天气和图像传输配置 =================
-# 默认红外推理服务器（可被每架无人机的独立配置覆盖）
-INFRARED_SERVER_HOST = os.getenv("INFRARED_SERVER_HOST", IROS_HOST)
-INFRARED_SERVER_PORT = int(os.getenv("INFRARED_SERVER_PORT", "8881"))
-
-# 每架无人机可单独指定图像接收端：
-# INFRARED_SERVER_HOST_UAV1/2/3/4/5 和 INFRARED_SERVER_PORT_UAV1/2/3/4/5
-INFRARED_SERVER_ENDPOINTS = []
-for _i in range(1, UAVnum + 1):
-    _host = os.getenv(f"INFRARED_SERVER_HOST_UAV{_i}", INFRARED_SERVER_HOST)
-    _port = int(os.getenv(f"INFRARED_SERVER_PORT_UAV{_i}", str(INFRARED_SERVER_PORT)))
-    INFRARED_SERVER_ENDPOINTS.append((_host, _port))
 
 VISIBLE_LIGHT_WEATHERS = [0, 3, 4, 5]  # 对应weather_scenarios中的索引
 INFRARED_WEATHERS = [1, 2, 6, 7, 8, 9]  # 对应weather_scenarios中的索引
@@ -173,7 +184,11 @@ def send_image_to_server(image_data, uav_idx, image_type="png"):
     image_type: 图像类型标识 (可扩展用途)
     """
     try:
-        host, port = INFRARED_SERVER_ENDPOINTS[uav_idx - 1]
+        endpoint = INFRARED_SERVER_ENDPOINTS[uav_idx - 1]
+        if endpoint is None:
+            return
+
+        host, port = endpoint
         # 创建TCP连接
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(1.5)
