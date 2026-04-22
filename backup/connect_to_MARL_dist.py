@@ -22,21 +22,27 @@ UAV_ports = []
 
 # 监听本机所有网卡
 host = '0.0.0.0'
-# IROS监听IP，如果是在服务器上运行UE4及该脚本,需要将该ip改为给开发板共享网络的主机IP；
-#如果是在主机上运行UE4及该脚本，需要将该ip改为开发板的IP地址，即192.168.137.2；
-IROS_HOST = os.getenv("IROS_HOST", "10.31.32.91")     #主机IP
-# IROS_HOST = os.getenv("IROS_HOST", "192.168.137.2") #开发板IP
+# 每架无人机对应的开发板IP（按 UAV1~UAV5 顺序）
+# 说明：8888/8881 用同一个 IP；8889/8882 用同一个 IP；依次类推。
+IROS_HOSTS = [
+    "10.31.32.91",  # UAV1
+    "10.31.65.31",  # UAV2
+    "10.31.32.91",  # UAV3
+    "13.31.32.91",  # UAV4
+    "14.31.32.91",  # UAV5
+]
+# IROS_HOST = IROS_HOSTS[0]
 
 send_msg = "011111"             # 初始观测向量
 # ================= 天气和图像传输配置 =================
 # 红外推理服务器端口配置：直接在代码中写死，按需启用/禁用
 # UAV1 默认启用；UAV2~UAV5 如果暂时不用，保持 None 即可，发送时会自动跳过。
 INFRARED_SERVER_ENDPOINTS = [
-    (IROS_HOST, 8881),  # UAV1 对应imx8mp
-    (IROS_HOST, 8882),  # UAV2 对应rk3588
-    (IROS_HOST, 8883),  # UAV3 对应飞腾派
-    (IROS_HOST, 8884),  # UAV4 对应p550
-    (IROS_HOST, 8885),  # UAV5 对应3A6000
+    (IROS_HOSTS[0], 8881),  # UAV1 对应imx8mp
+    (IROS_HOSTS[1], 8882),  # UAV2 对应rk3588
+    (IROS_HOSTS[2], 8883),  # UAV3 对应飞腾派
+    (IROS_HOSTS[3], 8884),  # UAV4 对应p550
+    (IROS_HOSTS[4], 8885),  # UAV5 对应3A6000
 ]
 
 # 如果当前只做单机测试，可以把不用的 UAV 端点改成 None，例如：
@@ -170,8 +176,9 @@ def notify_iros_weather_once():
 
     for idx in range(UAVnum):
         try:
-            sockets[idx].sendto(payload, (IROS_HOST, UAV_ports[idx]))
-            print(f"天气同步消息已发送: UAV{idx +1} -> {IROS_HOST}:{UAV_ports[idx]}, msg={send_msg}")
+            target_host = IROS_HOSTS[idx]
+            sockets[idx].sendto(payload, (target_host, UAV_ports[idx]))
+            print(f"天气同步消息已发送: UAV{idx +1} -> {target_host}:{UAV_ports[idx]}, msg={send_msg}")
         except Exception as e:
             print(f"天气同步消息发送失败: UAV{idx +1}, err={e}")
 
@@ -269,7 +276,7 @@ def th1():
         while True:
             if UAV_tasks[0] == -1:
                 # 修复：使用对应的 socket 发送，避免端口混乱
-                sockets[0].sendto(send_msg.encode("UTF-8"), (IROS_HOST, UAV_ports[0]))
+                sockets[0].sendto(send_msg.encode("UTF-8"), (IROS_HOSTS[0], UAV_ports[0]))
 
                 recv_data = sockets[0].recv(1024).decode("UTF-8")
                 print(f"服务端回复 UAV1 的消息是：{recv_data}")
@@ -311,7 +318,7 @@ def th2():
         global UAV_tasks, send_msg, UAV_sensors, UAV_sensor_ready, UAV_ports, sockets
         while True:
             if UAV_tasks[1] == -1:
-                sockets[1].sendto(send_msg.encode("UTF-8"), (IROS_HOST, UAV_ports[1]))
+                sockets[1].sendto(send_msg.encode("UTF-8"), (IROS_HOSTS[1], UAV_ports[1]))
                 recv_data = sockets[1].recv(1024).decode("UTF-8")
                 print(f"服务端回复 UAV2 的消息是：{recv_data}")
                 words = recv_data.split('#')
@@ -351,7 +358,7 @@ def th3():
         global UAV_tasks, send_msg, UAV_sensors, UAV_sensor_ready, UAV_ports, sockets
         while True:
             if UAV_tasks[2] == -1:
-                sockets[2].sendto(send_msg.encode("UTF-8"), (IROS_HOST, UAV_ports[2]))
+                sockets[2].sendto(send_msg.encode("UTF-8"), (IROS_HOSTS[2], UAV_ports[2]))
                 recv_data = sockets[2].recv(1024).decode("UTF-8")
                 print(f"服务端回复 UAV3 的消息是：{recv_data}")
                 words = recv_data.split('#')
@@ -391,7 +398,7 @@ def th4():
         global UAV_tasks, send_msg, UAV_sensors, UAV_sensor_ready, UAV_ports, sockets
         while True:
             if UAV_tasks[3] == -1:
-                sockets[3].sendto(send_msg.encode("UTF-8"), (IROS_HOST, UAV_ports[3]))
+                sockets[3].sendto(send_msg.encode("UTF-8"), (IROS_HOSTS[3], UAV_ports[3]))
                 recv_data = sockets[3].recv(1024).decode("UTF-8")
                 print(f"服务端回复 UAV4 的消息是：{recv_data}")
                 words = recv_data.split('#')
@@ -431,7 +438,7 @@ def th5():
         global UAV_tasks, send_msg, UAV_sensors, UAV_sensor_ready, UAV_ports, sockets
         while True:
             if UAV_tasks[4] == -1:
-                sockets[4].sendto(send_msg.encode("UTF-8"), (IROS_HOST, UAV_ports[4]))
+                sockets[4].sendto(send_msg.encode("UTF-8"), (IROS_HOSTS[4], UAV_ports[4]))
                 recv_data = sockets[4].recv(1024).decode("UTF-8")
                 print(f"服务端回复 UAV5 的消息是：{recv_data}")
                 words = recv_data.split('#')
